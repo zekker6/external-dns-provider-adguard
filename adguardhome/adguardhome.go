@@ -206,7 +206,7 @@ func parseRule(rule string) (*endpoint.Endpoint, error) {
 			return nil, fmt.Errorf("invalid rule: %s", rule)
 		}
 		r.DNSName = parts[2]
-		r.Targets = endpoint.Targets{strings.ReplaceAll(parts[1], fmt.Sprintf("%s", managedBy), "")}
+		r.Targets = endpoint.Targets{strings.ReplaceAll(parts[1], managedBy, "")}
 
 		return r, nil
 	}

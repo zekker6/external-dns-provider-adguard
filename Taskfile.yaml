@@ -1,0 +1,27 @@
+version: '3'
+
+tasks:
+  default:
+    silent: true
+
+  lint:
+    deps:
+      - vet
+      - fmt
+      - golangci
+
+  vet:
+    cmds:
+      - go vet ./...
+
+  fmt:
+    cmds:
+      - gofmt -l -w -s ./
+
+  golangci:
+    cmds:
+      - golangci-lint run
+
+  test:
+    cmds:
+      - go test ./...

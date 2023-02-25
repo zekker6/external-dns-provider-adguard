@@ -198,7 +198,7 @@ func TestNewAdguardHomeProvider(t *testing.T) {
 	_ = os.Setenv(envUser, "pw")
 	_ = os.Setenv(envPassword, "user")
 
-	got, err = NewAdguardHomeProvider(true)
+	_, err = NewAdguardHomeProvider(true)
 	if err != nil {
 		t.Errorf("NewAdguardHomeProvider() error = %v", err)
 	}

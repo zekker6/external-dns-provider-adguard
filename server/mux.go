@@ -25,12 +25,15 @@ func GetMux(p provider.Provider) *http.ServeMux {
 	m := http.NewServeMux()
 
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		log.WithField("path", r.URL.Path).WithField("method", r.Method).Debug("Received request")
 		w.Header().Set("Vary", "Content-Type")
 		w.Header().Set("Content-Type", "application/external.dns.plugin+json;version=1")
 		w.WriteHeader(http.StatusOK)
 	})
 
 	m.HandleFunc("/records", func(w http.ResponseWriter, r *http.Request) {
+		log.WithField("path", r.URL.Path).WithField("method", r.Method).Debug("Received request")
+
 		switch r.Method {
 		case http.MethodGet:
 			records, err := p.Records(context.Background())
@@ -45,7 +48,6 @@ func GetMux(p provider.Provider) *http.ServeMux {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			w.WriteHeader(http.StatusOK)
 		case http.MethodPost:
 			var changes plan.Changes
 			if err := json.NewDecoder(r.Body).Decode(&changes); err != nil {
@@ -59,13 +61,14 @@ func GetMux(p provider.Provider) *http.ServeMux {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			w.WriteHeader(200)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	})
 
 	m.HandleFunc("/adjustendpoints", func(w http.ResponseWriter, r *http.Request) {
+		log.WithField("path", r.URL.Path).WithField("method", r.Method).Debug("Received request")
+
 		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -83,11 +86,11 @@ func GetMux(p provider.Provider) *http.ServeMux {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-
-		w.WriteHeader(http.StatusOK)
 	})
 
 	m.HandleFunc("/propertyvaluesequals", func(w http.ResponseWriter, r *http.Request) {
+		log.WithField("path", r.URL.Path).WithField("method", r.Method).Debug("Received request")
+
 		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -110,7 +113,6 @@ func GetMux(p provider.Provider) *http.ServeMux {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		w.WriteHeader(http.StatusOK)
 	})
 
 	return m

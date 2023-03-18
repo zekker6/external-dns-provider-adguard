@@ -2,7 +2,8 @@ version: '3'
 
 tasks:
   default:
-    silent: true
+    cmds:
+      - task --list-all
 
   lint:
     deps:

@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/sirupsen/logrus v1.9.0
-	sigs.k8s.io/external-dns v0.13.3
+	sigs.k8s.io/external-dns v0.13.4
 )
 
 require (

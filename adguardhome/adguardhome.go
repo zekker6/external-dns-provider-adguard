@@ -44,7 +44,7 @@ type AdguardHomeProvider struct {
 	domainFilter endpoint.DomainFilter
 }
 
-// NewAdguardHomeProvider initializes a new Vultr BNS based provider
+// NewAdguardHomeProvider initializes a new AdguardHome based provider
 func NewAdguardHomeProvider(dryRun bool) (*AdguardHomeProvider, error) {
 	adguardHomeURL, adguardHomeUrlOk := os.LookupEnv(envURL)
 	if !adguardHomeUrlOk {

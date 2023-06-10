@@ -80,15 +80,21 @@ func NewAdguardHomeProvider(dryRun bool) (*AdguardHomeProvider, error) {
 		domainFilter: endpoint.DomainFilter{},
 	}
 
+	log.Debugf("AdguardHome provider started with url %s", adguardHomeURL)
+
 	return p, nil
 }
 
 // ApplyChanges implements Provider, syncing desired state with the AdguardHome server Local DNS.
 func (p *AdguardHomeProvider) ApplyChanges(ctx context.Context, changes *plan.Changes) error {
+	log.Debugf("ApplyChanges: %+v", changes)
+
 	originalRules, err := p.client.GetFilteringRules(ctx)
 	if err != nil {
 		return err
 	}
+
+	log.Debugf("loaded existing rules: %+v", originalRules)
 
 	resultingRules := make([]string, 0)
 	endpoints := make([]*endpoint.Endpoint, 0)
@@ -251,6 +257,8 @@ type setRules struct {
 }
 
 func (c *client) doRequest(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
+	log.Debugf("making %s request to %s", method, path)
+
 	req, err := http.NewRequestWithContext(ctx, method, c.endpoint+path, body)
 	if err != nil {
 		return nil, err
@@ -263,6 +271,8 @@ func (c *client) doRequest(ctx context.Context, method, path string, body io.Rea
 	if err != nil {
 		return nil, err
 	}
+
+	log.Debugf("response status code %d", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)

@@ -3,12 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/zekker6/external-dns-adguard-provider/adguardhome"
-	"github.com/zekker6/external-dns-adguard-provider/server"
+	"sigs.k8s.io/external-dns/provider/plugin"
 )
 
 var (
@@ -39,8 +39,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	m := server.GetMux(p)
-	if err := http.ListenAndServe(":8888", m); err != nil {
-		log.Fatalf("listen failed error: %v", err)
-	}
+	st := make(chan struct{})
+	go func() {
+		<-st
+		log.Info("AdguardHomeProvider started on :8888")
+	}()
+	plugin.StartHTTPApi(p, st, 10*time.Second, 10*time.Second, ":8888")
 }

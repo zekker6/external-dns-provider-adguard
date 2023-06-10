@@ -40,7 +40,7 @@ spec:
             - --plugin-provider-url=http://localhost:8888
 
         - name: adguardhome-provider
-          image: ghcr.io/zekker6/externs-dns-provider-adguard:latest
+          image: ghcr.io/zekker6/external-dns-provider-adguard:latest
           env:
             - name: ADGUARD_HOME_URL
               value: "YOUR_ADGUARD_HOME_URL" # Note: URL should be in the format of http://adguard.home:3000/control/
@@ -111,7 +111,7 @@ spec:
             - --plugin-provider-url=http://localhost:8888
 
         - name: adguardhome-provider
-          image: ghcr.io/zekker6/externs-dns-provider-adguard:latest
+          image: ghcr.io/zekker6/external-dns-provider-adguard:latest
           env:
             - name: ADGUARD_HOME_URL
               value: "YOUR_ADGUARD_HOME_URL" # Note: URL should be in the format of http://adguard.home:3000/control/

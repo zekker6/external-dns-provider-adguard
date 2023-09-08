@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -103,7 +104,7 @@ func (p *AdguardHomeProvider) ApplyChanges(ctx context.Context, changes *plan.Ch
 		e, err := parseRule(rule)
 		if err != nil {
 			// Keep rules not managed by external-dns as-is
-			if err == notManagedError {
+			if errors.Is(err, notManagedError) {
 				resultingRules = append(resultingRules, rule)
 				continue
 			}

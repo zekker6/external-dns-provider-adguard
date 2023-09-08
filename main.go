@@ -7,8 +7,9 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"sigs.k8s.io/external-dns/provider/webhook"
+
 	"github.com/zekker6/external-dns-adguard-provider/adguardhome"
-	"sigs.k8s.io/external-dns/provider/plugin"
 )
 
 var (
@@ -44,5 +45,5 @@ func main() {
 		<-st
 		log.Info("AdguardHomeProvider started on :8888")
 	}()
-	plugin.StartHTTPApi(p, st, 10*time.Second, 10*time.Second, ":8888")
+	webhook.StartHTTPApi(p, st, 10*time.Second, 10*time.Second, ":8888")
 }

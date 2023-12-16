@@ -1,7 +1,9 @@
-# external-dns adguard provider
+# AdguardHome provider for ExternalDNS
 
-This is an early attempt to add support for AdguardHome to external-dns via plugin system introduced in [this PR](https://github.com/kubernetes-sigs/external-dns/pull/3063).
-Note that this PR is still in progress and may change in the future.
+A [webhook plugin](https://github.com/kubernetes-sigs/external-dns/pull/3063) for [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) to support AdguardHome DNS provider.
+
+This provider implementation is based on using AdguardHome [filtering rules](https://adguard.com/kb/general/ad-filtering/create-own-filters/).
+It takes ownership only for rules which are created by this provider, so existing rules are not touched.
 
 ## Setting up ExternalDNS for AdguardHome
 
@@ -32,7 +34,7 @@ spec:
     spec:
       containers:
         - name: external-dns
-          image: registry.k8s.io/external-dns/external-dns:v0.13.2
+          image: registry.k8s.io/external-dns/external-dns:v0.14.0
           args:
             - --source=service # ingress is also possible
             - --domain-filter=example.com # (optional) limit to only example.com domains; change to match the zone created above.
@@ -40,7 +42,7 @@ spec:
             - --plugin-provider-url=http://localhost:8888
 
         - name: adguardhome-provider
-          image: ghcr.io/zekker6/external-dns-provider-adguard:latest
+          image: ghcr.io/zekker6/external-dns-provider-adguard:v0.0.8
           env:
             - name: ADGUARD_HOME_URL
               value: "YOUR_ADGUARD_HOME_URL" # Note: URL should be in the format of http://adguard.home:3000/control/
@@ -104,7 +106,7 @@ spec:
       serviceAccountName: external-dns
       containers:
         - name: external-dns
-          image: registry.k8s.io/external-dns/external-dns:v0.13.2
+          image: registry.k8s.io/external-dns/external-dns:v0.14.0
           args:
             - --source=service # ingress is also possible
             - --domain-filter=example.com # (optional) limit to only example.com domains; change to match the zone created above.
@@ -112,7 +114,7 @@ spec:
             - --plugin-provider-url=http://localhost:8888
 
         - name: adguardhome-provider
-          image: ghcr.io/zekker6/external-dns-provider-adguard:latest
+          image: ghcr.io/zekker6/external-dns-provider-adguard:v0.0.8
           env:
             - name: ADGUARD_HOME_URL
               value: "YOUR_ADGUARD_HOME_URL" # Note: URL should be in the format of http://adguard.home:3000/control/

@@ -1,6 +1,6 @@
 # AdguardHome provider for ExternalDNS
 
-A [webhook plugin](https://github.com/kubernetes-sigs/external-dns/pull/3063) for [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) to support AdguardHome DNS provider.
+A [webhook plugin](https://github.com/kubernetes-sigs/external-dns/blob/v0.14.0/docs/tutorials/webhook-provider.md) for [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) to support AdguardHome DNS provider.
 
 This provider implementation is based on using AdguardHome [filtering rules](https://adguard.com/kb/general/ad-filtering/create-own-filters/).
 It takes ownership only for rules which are created by this provider, so existing rules are not touched.
@@ -38,8 +38,8 @@ spec:
           args:
             - --source=service # ingress is also possible
             - --domain-filter=example.com # (optional) limit to only example.com domains; change to match the zone created above.
-            - --provider=plugin
-            - --plugin-provider-url=http://localhost:8888
+            - --provider=webhook
+            - --webhook-provider-url=http://localhost:8888
 
         - name: adguardhome-provider
           image: ghcr.io/zekker6/external-dns-provider-adguard:v0.0.8
@@ -110,8 +110,8 @@ spec:
           args:
             - --source=service # ingress is also possible
             - --domain-filter=example.com # (optional) limit to only example.com domains; change to match the zone created above.
-            - --provider=plugin
-            - --plugin-provider-url=http://localhost:8888
+            - --provider=webhook
+            - --webhook-provider-url=http://localhost:8888
 
         - name: adguardhome-provider
           image: ghcr.io/zekker6/external-dns-provider-adguard:v0.0.8

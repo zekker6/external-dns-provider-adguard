@@ -25,7 +25,7 @@ jobs:
         run: go mod download
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v4
 
       - name: Run lint
         run: task lint

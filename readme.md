@@ -2,7 +2,7 @@
 
 A [webhook plugin](https://github.com/kubernetes-sigs/external-dns/blob/v0.14.0/docs/tutorials/webhook-provider.md) for [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) to support AdguardHome DNS provider.
 
-This provider implementation is based on using AdguardHome [filtering rules](https://adguard.com/kb/general/ad-filtering/create-own-filters/).
+This provider implementation is based on using AdguardHome [filtering rules](https://adguard-dns.io/kb/general/dns-filtering-syntax/).
 It takes ownership only for rules which are created by this provider, so existing rules are not touched.
 
 ## Setting up ExternalDNS for AdguardHome

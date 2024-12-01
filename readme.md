@@ -182,8 +182,6 @@ Once the service has an external IP assigned, ExternalDNS will notice the new se
 
 Check your AdguardHome DNS records to see if the new record was created.
 
-Click on the zone for the one created above if a different domain was used.
-
 Click on "Filters" and then "Custom filtering rules"
 
 This should show the external IP address of the service as the "Answer" for your domain.

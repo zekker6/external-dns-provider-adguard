@@ -21,7 +21,7 @@ tasks:
 
   golangci:
     cmds:
-      - golangci-lint run --modules-download-mode vendor
+      - golangci-lint run --modules-download-mode readonly
 
   test:
     cmds:

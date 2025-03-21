@@ -18,7 +18,7 @@ jobs:
         with:
           go-version: "1.24"
 
-      - name: Install Task
+      - name: Install mise
         uses: jdx/mise-action@v2
 
       - name: Install dependencies

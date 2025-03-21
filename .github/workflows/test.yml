@@ -21,6 +21,9 @@ jobs:
       - name: Install mise
         uses: jdx/mise-action@v2
 
+      - name: Install dependencies
+        run: go mod vendor
+
       - name: Run lint
         run: task lint
 

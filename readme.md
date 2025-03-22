@@ -7,7 +7,7 @@ It takes ownership only for rules which are created by this provider, so existin
 
 ### Compatibility
 
-This plugin was tested with AdguardHome up to v0.107.54 and ExternalDNS v0.15.0.
+This plugin was tested with AdguardHome up to v0.107.54 and ExternalDNS v0.16.1.
 
 ## Setting up ExternalDNS for AdguardHome
 
@@ -38,7 +38,7 @@ spec:
     spec:
       containers:
         - name: external-dns
-          image: registry.k8s.io/external-dns/external-dns:v0.14.0
+          image: registry.k8s.io/external-dns/external-dns:v0.16.1
           args:
             - --source=service # ingress is also possible
             - --domain-filter=example.com # (optional) limit to only example.com domains; change to match the zone created above.
@@ -46,7 +46,7 @@ spec:
             - --webhook-provider-url=http://localhost:8888
 
         - name: adguardhome-provider
-          image: ghcr.io/zekker6/external-dns-provider-adguard:v0.0.8
+          image: ghcr.io/zekker6/external-dns-provider-adguard:v1.10
           env:
             - name: ADGUARD_HOME_URL
               value: "YOUR_ADGUARD_HOME_URL" # Note: URL should be in the format of http://adguard.home:3000/control/
@@ -54,6 +54,9 @@ spec:
               value: "YOUR_ADGUARD_HOME_PASSWORD"
             - name: ADGUARD_HOME_USER
               value: "YOUR_ADGUARD_HOME_USER"
+#              It is possible to run multiple instances of provider with a single AdguardHome instance by using different owner refs
+#            - name: ADGUARD_HOME_MANAGED_BY_REF
+#              value: "cluster-name"
 ```
 
 ### Manifest (for clusters with RBAC enabled)
@@ -126,6 +129,9 @@ spec:
               value: "YOUR_ADGUARD_HOME_PASSWORD"
             - name: ADGUARD_HOME_USER
               value: "YOUR_ADGUARD_HOME_USER"
+#              It is possible to run multiple instances of provider with a single AdguardHome instance by using different owner refs
+#            - name: ADGUARD_HOME_MANAGED_BY_REF
+#              value: "cluster-name"
 ```
 
 

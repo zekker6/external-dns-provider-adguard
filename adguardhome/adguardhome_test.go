@@ -105,7 +105,87 @@ func TestAdguardHomeProvider_ApplyChanges(t *testing.T) {
 		t.Errorf("rules do not match: got: %v, expected: %v", p.client.(*mockAdguardClient).rules, expectedRules)
 	}
 }
+func TestAdguardHomeProvider_ManagedByRefs(t *testing.T) {
+	// Set up the mock client
+	client := newMockClient()
 
+	// Set up the first provider with a specific managedBy reference
+	provider1 := &AdguardHomeProvider{
+		client:          client,
+		managedBySuffix: "ref1",
+	}
+
+	// Set up the second provider with a different managedBy reference
+	provider2 := &AdguardHomeProvider{
+		client:          client,
+		managedBySuffix: "ref2",
+	}
+
+	// Apply changes with the first provider
+	changes1 := &plan.Changes{
+		Create: []*endpoint.Endpoint{
+			{
+				DNSName:    "example.com",
+				RecordType: endpoint.RecordTypeA,
+				Targets:    endpoint.Targets{"2.2.2.2"},
+			},
+		},
+	}
+	err := provider1.ApplyChanges(context.Background(), changes1)
+	if err != nil {
+		t.Errorf("provider1 failed to apply changes: %v", err)
+	}
+
+	// Apply changes with the second provider
+	changes2 := &plan.Changes{
+		Create: []*endpoint.Endpoint{
+			{
+				DNSName:    "example.org",
+				RecordType: endpoint.RecordTypeA,
+				Targets:    endpoint.Targets{"3.3.3.3"},
+			},
+		},
+	}
+	err = provider2.ApplyChanges(context.Background(), changes2)
+	if err != nil {
+		t.Errorf("provider2 failed to apply changes: %v", err)
+	}
+
+	// Fetch records from both providers
+	records1, err := provider1.Records(context.Background())
+	if err != nil {
+		t.Errorf("provider1 failed to fetch records: %v", err)
+	}
+
+	records2, err := provider2.Records(context.Background())
+	if err != nil {
+		t.Errorf("provider2 failed to fetch records: %v", err)
+	}
+
+	// Validate that the records do not override each other
+	expectedRecords1 := []*endpoint.Endpoint{
+		{
+			DNSName:    "example.com",
+			RecordType: endpoint.RecordTypeA,
+			Targets:    endpoint.Targets{"2.2.2.2"},
+		},
+	}
+	expectedRecords2 := []*endpoint.Endpoint{
+		{
+			DNSName:    "example.org",
+			RecordType: endpoint.RecordTypeA,
+			Targets:    endpoint.Targets{"3.3.3.3"},
+		},
+	}
+
+	if !reflect.DeepEqual(records1, expectedRecords1) {
+		t.Errorf("provider1 records do not match: got: %v, expected: %v", records1, expectedRecords1)
+	}
+
+	if !reflect.DeepEqual(records2, expectedRecords2) {
+		t.Errorf("provider2 records do not match: got: %v, expected: %v", records2, expectedRecords2)
+	}
+}
 func TestAdguardHomeProvider_Records(t *testing.T) {
 	type fields struct {
 		BaseProvider provider.BaseProvider

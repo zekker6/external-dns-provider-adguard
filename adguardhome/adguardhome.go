@@ -25,9 +25,10 @@ var (
 const (
 	managedBy = "$managed by external-dns"
 
-	envURL      = "ADGUARD_HOME_URL"
-	envPassword = "ADGUARD_HOME_PASS"
-	envUser     = "ADGUARD_HOME_USER"
+	envURL       = "ADGUARD_HOME_URL"
+	envPassword  = "ADGUARD_HOME_PASS"
+	envUser      = "ADGUARD_HOME_USER"
+	envManagedBy = "ADGUARD_HOME_MANAGED_BY_REF"
 )
 
 // Client is an interface for the AdguardHome API.
@@ -43,6 +44,8 @@ type AdguardHomeProvider struct {
 	client Client
 
 	domainFilter endpoint.DomainFilter
+
+	managedBySuffix string
 }
 
 // NewAdguardHomeProvider initializes a new AdguardHome based provider
@@ -75,15 +78,25 @@ func NewAdguardHomeProvider(dryRun bool) (*AdguardHomeProvider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create the adguard home api hс: %w", err)
 	}
+	managedBySuffix, _ := os.LookupEnv(envManagedBy)
 
 	p := &AdguardHomeProvider{
-		client:       c,
-		domainFilter: endpoint.DomainFilter{},
+		client:          c,
+		domainFilter:    endpoint.DomainFilter{},
+		managedBySuffix: managedBySuffix,
 	}
 
 	log.Debugf("AdguardHome provider started with url %s", adguardHomeURL)
 
 	return p, nil
+}
+
+func (p *AdguardHomeProvider) getManagedBy() string {
+	if p.managedBySuffix == "" {
+		return managedBy
+	}
+
+	return fmt.Sprintf("%s;ref:%s", managedBy, p.managedBySuffix)
 }
 
 // ApplyChanges implements Provider, syncing desired state with the AdguardHome server Local DNS.
@@ -100,8 +113,9 @@ func (p *AdguardHomeProvider) ApplyChanges(ctx context.Context, changes *plan.Ch
 	resultingRules := make([]string, 0)
 	endpoints := make([]*endpoint.Endpoint, 0)
 	endpointsAExists := make(map[string]*endpoint.Endpoint)
+	suffix := p.getManagedBy()
 	for _, rule := range originalRules {
-		e, err := parseRule(rule)
+		e, err := parseRule(rule, suffix)
 		if err != nil {
 			// Keep rules not managed by external-dns as-is
 			if errors.Is(err, notManagedError) {
@@ -147,7 +161,7 @@ func (p *AdguardHomeProvider) ApplyChanges(ctx context.Context, changes *plan.Ch
 	}
 
 	for _, e := range endpoints {
-		s := endpointToString(e)
+		s := endpointToString(e, suffix)
 		resultingRules = append(resultingRules, s)
 	}
 
@@ -170,10 +184,11 @@ func (p *AdguardHomeProvider) Records(ctx context.Context) ([]*endpoint.Endpoint
 
 	var ret []*endpoint.Endpoint
 	endpointsAExists := make(map[string]*endpoint.Endpoint)
+	suffix := p.getManagedBy()
 	for _, rule := range resp {
-		e, err := parseRule(rule)
+		e, err := parseRule(rule, suffix)
 		if err != nil {
-			if err == notManagedError {
+			if errors.Is(err, notManagedError) {
 				continue
 			}
 			return nil, err
@@ -199,8 +214,8 @@ func endpointSupported(e *endpoint.Endpoint) bool {
 	return e.RecordType == endpoint.RecordTypeA || e.RecordType == endpoint.RecordTypeTXT
 }
 
-func parseRule(rule string) (*endpoint.Endpoint, error) {
-	if !strings.Contains(rule, managedBy) {
+func parseRule(rule, suffix string) (*endpoint.Endpoint, error) {
+	if !strings.Contains(rule, suffix) {
 		return nil, notManagedError
 	}
 
@@ -213,7 +228,7 @@ func parseRule(rule string) (*endpoint.Endpoint, error) {
 			return nil, fmt.Errorf("invalid rule: %s", rule)
 		}
 		r.DNSName = parts[2]
-		r.Targets = endpoint.Targets{strings.ReplaceAll(parts[1], managedBy, "")}
+		r.Targets = endpoint.Targets{strings.ReplaceAll(parts[1], suffix, "")}
 
 		return r, nil
 	}
@@ -232,12 +247,12 @@ func parseRule(rule string) (*endpoint.Endpoint, error) {
 	return r, nil
 }
 
-func endpointToString(e *endpoint.Endpoint) string {
+func endpointToString(e *endpoint.Endpoint, suffix string) string {
 	if e.RecordType == endpoint.RecordTypeTXT {
-		return fmt.Sprintf("# %s %s %s", e.Targets[0], e.DNSName, managedBy)
+		return fmt.Sprintf("# %s %s %s", e.Targets[0], e.DNSName, suffix)
 	}
 
-	return fmt.Sprintf("%s %s #%s", e.Targets[0], e.DNSName, managedBy)
+	return fmt.Sprintf("%s %s #%s", e.Targets[0], e.DNSName, suffix)
 }
 
 type client struct {

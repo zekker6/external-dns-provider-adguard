@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	notManagedError = fmt.Errorf("rule is managed by external-dns")
+	errNotManaged = fmt.Errorf("rule is managed by external-dns")
 )
 
 const (
@@ -118,7 +118,7 @@ func (p *AdguardHomeProvider) ApplyChanges(ctx context.Context, changes *plan.Ch
 		e, err := parseRule(rule, suffix)
 		if err != nil {
 			// Keep rules not managed by external-dns as-is
-			if errors.Is(err, notManagedError) {
+			if errors.Is(err, errNotManaged) {
 				resultingRules = append(resultingRules, rule)
 				continue
 			}
@@ -188,7 +188,7 @@ func (p *AdguardHomeProvider) Records(ctx context.Context) ([]*endpoint.Endpoint
 	for _, rule := range resp {
 		e, err := parseRule(rule, suffix)
 		if err != nil {
-			if errors.Is(err, notManagedError) {
+			if errors.Is(err, errNotManaged) {
 				continue
 			}
 			return nil, err
@@ -216,7 +216,7 @@ func endpointSupported(e *endpoint.Endpoint) bool {
 
 func parseRule(rule, suffix string) (*endpoint.Endpoint, error) {
 	if !strings.Contains(rule, suffix) {
-		return nil, notManagedError
+		return nil, errNotManaged
 	}
 
 	if strings.HasPrefix(rule, "#") {

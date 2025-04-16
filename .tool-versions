@@ -1,4 +1,4 @@
 goreleaser    2.8.1
 task          3.42.1
 act           0.2.76
-golangci-lint 2.1.1
+golangci-lint 2.1.2

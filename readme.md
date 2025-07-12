@@ -7,7 +7,7 @@ It takes ownership only for rules which are created by this provider, so existin
 
 ### Compatibility
 
-This plugin was tested with AdguardHome up to v0.107.54 and ExternalDNS v0.16.1.
+This plugin was tested with AdguardHome up to v0.107.62 and ExternalDNS v0.18.0.
 
 ## Setting up ExternalDNS for AdguardHome
 

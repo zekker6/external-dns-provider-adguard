@@ -190,7 +190,7 @@ func TestAdguardHomeProvider_Records(t *testing.T) {
 	type fields struct {
 		BaseProvider provider.BaseProvider
 		client       Client
-		domainFilter endpoint.DomainFilter
+		domainFilter *endpoint.DomainFilter
 		DryRun       bool
 	}
 	type args struct {

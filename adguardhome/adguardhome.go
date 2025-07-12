@@ -43,7 +43,7 @@ type AdguardHomeProvider struct {
 
 	client Client
 
-	domainFilter endpoint.DomainFilter
+	domainFilter *endpoint.DomainFilter
 
 	managedBySuffix string
 }
@@ -82,7 +82,7 @@ func NewAdguardHomeProvider(dryRun bool) (*AdguardHomeProvider, error) {
 
 	p := &AdguardHomeProvider{
 		client:          c,
-		domainFilter:    endpoint.DomainFilter{},
+		domainFilter:    &endpoint.DomainFilter{},
 		managedBySuffix: managedBySuffix,
 	}
 

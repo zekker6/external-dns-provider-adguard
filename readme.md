@@ -1,6 +1,6 @@
 # AdguardHome provider for ExternalDNS
 
-A [webhook plugin](https://github.com/kubernetes-sigs/external-dns/blob/v0.14.0/docs/tutorials/webhook-provider.md) for [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) to support AdguardHome DNS provider.
+A [webhook plugin](https://github.com/kubernetes-sigs/external-dns/blob/v0.18.0/docs/tutorials/webhook-provider.md) for [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) to support AdguardHome DNS provider.
 
 This provider implementation is based on using AdguardHome [filtering rules](https://adguard-dns.io/kb/general/dns-filtering-syntax/).
 It takes ownership only for rules which are created by this provider, so existing rules are not touched.
@@ -38,7 +38,7 @@ spec:
     spec:
       containers:
         - name: external-dns
-          image: registry.k8s.io/external-dns/external-dns:v0.16.1
+          image: registry.k8s.io/external-dns/external-dns:v0.18.0
           args:
             - --source=service # ingress is also possible
             - --domain-filter=example.com # (optional) limit to only example.com domains; change to match the zone created above.
@@ -46,7 +46,7 @@ spec:
             - --webhook-provider-url=http://localhost:8888
 
         - name: adguardhome-provider
-          image: ghcr.io/zekker6/external-dns-provider-adguard:v1.10
+          image: ghcr.io/zekker6/external-dns-provider-adguard:v1.2.0
           env:
             - name: ADGUARD_HOME_URL
               value: "YOUR_ADGUARD_HOME_URL" # Note: URL should be in the format of http://adguard.home:3000/control/
@@ -113,7 +113,7 @@ spec:
       serviceAccountName: external-dns
       containers:
         - name: external-dns
-          image: registry.k8s.io/external-dns/external-dns:v0.14.0
+          image: registry.k8s.io/external-dns/external-dns:v0.18.0
           args:
             - --source=service # ingress is also possible
             - --domain-filter=example.com # (optional) limit to only example.com domains; change to match the zone created above.
@@ -121,7 +121,7 @@ spec:
             - --webhook-provider-url=http://localhost:8888
 
         - name: adguardhome-provider
-          image: ghcr.io/zekker6/external-dns-provider-adguard:v0.0.8
+          image: ghcr.io/zekker6/external-dns-provider-adguard:v1.2.0
           env:
             - name: ADGUARD_HOME_URL
               value: "YOUR_ADGUARD_HOME_URL" # Note: URL should be in the format of http://adguard.home:3000/control/

@@ -18,48 +18,6 @@ This tutorial describes how to setup ExternalDNS for usage within a Kubernetes c
 Connect your `kubectl` client to the cluster you want to test ExternalDNS with.
 Then apply one of the following manifests file to deploy ExternalDNS.
 
-#### Manifest (for clusters without RBAC enabled)
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: external-dns
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: external-dns
-  strategy:
-    type: Recreate
-  template:
-    metadata:
-      labels:
-        app: external-dns
-    spec:
-      containers:
-        - name: external-dns
-          image: registry.k8s.io/external-dns/external-dns:v0.18.0
-          args:
-            - --source=service # ingress is also possible
-            - --domain-filter=example.com # (optional) limit to only example.com domains; change to match the zone created above.
-            - --provider=webhook
-            - --webhook-provider-url=http://localhost:8888
-
-        - name: adguardhome-provider
-          image: ghcr.io/zekker6/external-dns-provider-adguard:v1.2.0
-          env:
-            - name: ADGUARD_HOME_URL
-              value: "YOUR_ADGUARD_HOME_URL" # Note: URL should be in the format of http://adguard.home:3000/control/
-            - name: ADGUARD_HOME_PASS
-              value: "YOUR_ADGUARD_HOME_PASSWORD"
-            - name: ADGUARD_HOME_USER
-              value: "YOUR_ADGUARD_HOME_USER"
-#              It is possible to run multiple instances of provider with a single AdguardHome instance by using different owner refs
-#            - name: ADGUARD_HOME_MANAGED_BY_REF
-#              value: "cluster-name"
-```
-
-### Manifest (for clusters with RBAC enabled)
 ```yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -71,15 +29,15 @@ kind: ClusterRole
 metadata:
   name: external-dns
 rules:
-- apiGroups: [""]
-  resources: ["services","endpoints","pods"]
-  verbs: ["get","watch","list"]
-- apiGroups: ["extensions","networking.k8s.io"]
-  resources: ["ingresses"] 
-  verbs: ["get","watch","list"]
-- apiGroups: [""]
-  resources: ["nodes"]
-  verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["services","endpoints","pods","nodes"]
+    verbs: ["get","watch","list"]
+  - apiGroups: ["extensions","networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get","watch","list"]
+  - apiGroups: [ "discovery.k8s.io" ]
+    resources: [ "endpointslices" ]
+    verbs: [ "get","watch","list" ]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

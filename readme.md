@@ -92,6 +92,72 @@ spec:
 #              value: "cluster-name"
 ```
 
+### Deploy ExternalDNS with the Helm chart
+
+ExternalDNS project provides an [official Helm chart](https://github.com/kubernetes-sigs/external-dns/tree/master/charts/external-dns) that can be used to deploy ExternalDNS with AdguardHome provider.
+
+Example values file for the Helm chart:
+
+```yaml
+sources:
+  - ingress
+  - service
+
+provider:
+  name: webhook
+  webhook:
+    image:
+      repository: ghcr.io/zekker6/external-dns-provider-adguard
+      tag: v1.2.0
+      pullPolicy: IfNotPresent
+    env:
+      - name: ADGUARD_HOME_URL
+        valueFrom:
+          secretKeyRef:
+            name: adguard-credentials
+            key: ADGUARD_HOME_URL
+      - name: ADGUARD_HOME_USER
+        valueFrom:
+          secretKeyRef:
+            name: adguard-credentials
+            key: ADGUARD_HOME_USER
+      - name: ADGUARD_HOME_PASS
+        valueFrom:
+          secretKeyRef:
+            name: adguard-credentials
+            key: ADGUARD_HOME_PASS
+    securityContext:
+      runAsUser: 0
+      runAsNonRoot: false
+      allowPrivilegeEscalation: true
+    livenessProbe:
+      httpGet:
+        path: /healthz  
+        port: 8888  
+    readinessProbe:
+      httpGet:
+        path: /healthz 
+        port: 8888 
+
+    service:
+      port: 8888
+domainFilters:
+  - example.com
+
+extraArgs:
+  - --webhook-provider-url=http://localhost:8888
+
+serviceAccount:
+  create: true
+  name: external-dns
+
+rbac:
+  create: true
+  additionalPermissions: []
+
+logLevel: info
+logFormat: text
+```
 
 ## Deploying an Nginx Service
 

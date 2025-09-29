@@ -95,11 +95,12 @@ func TestAdguardHomeProvider_ApplyChanges(t *testing.T) {
 		t.Errorf("records do not match: got: %v, expected: %v", r, expected)
 	}
 
-	// Ensure original rules were kept in place
+	// Ensure original rules were kept in place and artificial rule added
 	expectedRules := []string{
 		"# I am not for external-dns",
 		"2.2.2.2 example.com #$managed by external-dns",
 		"3.3.3.3 example.com #$managed by external-dns",
+		"@@||example.com #$managed by external-dns",
 	}
 	if !reflect.DeepEqual(p.client.(*mockAdguardClient).rules, expectedRules) {
 		t.Errorf("rules do not match: got: %v, expected: %v", p.client.(*mockAdguardClient).rules, expectedRules)

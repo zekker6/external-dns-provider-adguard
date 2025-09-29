@@ -15,7 +15,8 @@ import (
 )
 
 var (
-	errNotManaged = fmt.Errorf("rule is managed by external-dns")
+	errNotManaged       = fmt.Errorf("rule is managed by external-dns")
+	errArtificialRecord = fmt.Errorf("artificial domain rule")
 )
 
 const (
@@ -111,6 +112,10 @@ func (p *AdguardHomeProvider) ApplyChanges(ctx context.Context, changes *plan.Ch
 				resultingRules = append(resultingRules, rule)
 				continue
 			}
+			// Skip artificial rules we manage; they will be reconstructed
+			if errors.Is(err, errArtificialRecord) {
+				continue
+			}
 			return fmt.Errorf("failed to parse rule %s: %w", rule, err)
 		}
 
@@ -149,9 +154,21 @@ func (p *AdguardHomeProvider) ApplyChanges(ctx context.Context, changes *plan.Ch
 		log.Debugf("add custom rule %s", createEndpoint)
 	}
 
+	// Build resulting rules: first all endpoint rules, then one artificial rule per unique A record domain
+	domainSeen := make(map[string]struct{})
+	domainsOrder := make([]string, 0)
 	for _, e := range endpoints {
 		s := endpointToString(e, suffix)
 		resultingRules = append(resultingRules, s)
+		if e.RecordType == endpoint.RecordTypeA {
+			if _, ok := domainSeen[e.DNSName]; !ok {
+				domainSeen[e.DNSName] = struct{}{}
+				domainsOrder = append(domainsOrder, e.DNSName)
+			}
+		}
+	}
+	for _, d := range domainsOrder {
+		resultingRules = append(resultingRules, artificialRuleToString(d, suffix))
 	}
 
 	return p.client.SaveFilteringRules(ctx, resultingRules)
@@ -180,6 +197,9 @@ func (p *AdguardHomeProvider) Records(ctx context.Context) ([]*endpoint.Endpoint
 			if errors.Is(err, errNotManaged) {
 				continue
 			}
+			if errors.Is(err, errArtificialRecord) {
+				continue
+			}
 			return nil, err
 		}
 
@@ -206,6 +226,11 @@ func endpointSupported(e *endpoint.Endpoint) bool {
 func parseRule(rule, suffix string) (*endpoint.Endpoint, error) {
 	if !strings.Contains(rule, suffix) {
 		return nil, errNotManaged
+	}
+
+	// Ignore artificial rules that we manage and will reconstruct
+	if strings.HasPrefix(rule, "@@||") {
+		return nil, errArtificialRecord
 	}
 
 	if strings.HasPrefix(rule, "#") {
@@ -242,4 +267,8 @@ func endpointToString(e *endpoint.Endpoint, suffix string) string {
 	}
 
 	return fmt.Sprintf("%s %s #%s", e.Targets[0], e.DNSName, suffix)
+}
+
+func artificialRuleToString(domain, suffix string) string {
+	return fmt.Sprintf("@@||%s #%s", domain, suffix)
 }

@@ -26,3 +26,12 @@ tasks:
   test:
     cmds:
       - go test ./...
+
+  deps-update:
+    cmds:
+      - go get -u ./...
+      - go mod tidy
+
+  build:
+    cmds:
+      - go build -o adguardhome-provider .

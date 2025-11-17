@@ -21,6 +21,9 @@ jobs:
       - name: Install mise
         uses: jdx/mise-action@v3
 
+      - name: Run build
+        run: task build
+
       - name: Run lint
         run: task lint
 

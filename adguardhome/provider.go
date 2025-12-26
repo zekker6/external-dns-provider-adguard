@@ -2,6 +2,7 @@ package adguardhome
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -149,6 +150,7 @@ func (p *AdguardHomeProvider) ApplyChanges(ctx context.Context, changes *plan.Ch
 				DNSName:    createEndpoint.DNSName,
 				Targets:    endpoint.Targets{target},
 				RecordType: createEndpoint.RecordType,
+				Labels:     createEndpoint.Labels,
 			})
 		}
 		log.Debugf("add custom rule %s", createEndpoint)
@@ -233,11 +235,26 @@ func parseRule(rule, suffix string) (*endpoint.Endpoint, error) {
 		return nil, errArtificialRecord
 	}
 
+	// Extract labels from the rule if present
+	var labels endpoint.Labels
+	ruleWithoutLabels := rule
+	if labelsIdx := strings.Index(rule, ";labels="); labelsIdx != -1 {
+		labelsStart := labelsIdx + len(";labels=")
+		labelsJSON := rule[labelsStart:]
+		labels = make(endpoint.Labels)
+		if err := json.Unmarshal([]byte(labelsJSON), &labels); err != nil {
+			log.Warnf("failed to parse labels from rule %s: %v", rule, err)
+			labels = nil
+		}
+		ruleWithoutLabels = rule[:labelsIdx]
+	}
+
 	if strings.HasPrefix(rule, "#") {
 		r := &endpoint.Endpoint{
 			RecordType: endpoint.RecordTypeTXT,
+			Labels:     labels,
 		}
-		parts := strings.SplitN(rule, " ", 4)
+		parts := strings.SplitN(ruleWithoutLabels, " ", 4)
 		if len(parts) != 4 {
 			return nil, fmt.Errorf("invalid rule: %s", rule)
 		}
@@ -247,7 +264,7 @@ func parseRule(rule, suffix string) (*endpoint.Endpoint, error) {
 		return r, nil
 	}
 
-	parts := strings.SplitN(rule, " ", 3)
+	parts := strings.SplitN(ruleWithoutLabels, " ", 3)
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid rule: %s", rule)
 	}
@@ -256,17 +273,27 @@ func parseRule(rule, suffix string) (*endpoint.Endpoint, error) {
 		RecordType: endpoint.RecordTypeA,
 		DNSName:    parts[1],
 		Targets:    endpoint.Targets{parts[0]},
+		Labels:     labels,
 	}
 
 	return r, nil
 }
 
 func endpointToString(e *endpoint.Endpoint, suffix string) string {
-	if e.RecordType == endpoint.RecordTypeTXT {
-		return fmt.Sprintf("# %s %s %s", e.Targets[0], e.DNSName, suffix)
+	// Serialize labels if present
+	labelsSuffix := ""
+	if len(e.Labels) > 0 {
+		labelsJSON, err := json.Marshal(e.Labels)
+		if err == nil {
+			labelsSuffix = fmt.Sprintf(";labels=%s", string(labelsJSON))
+		}
 	}
 
-	return fmt.Sprintf("%s %s #%s", e.Targets[0], e.DNSName, suffix)
+	if e.RecordType == endpoint.RecordTypeTXT {
+		return fmt.Sprintf("# %s %s %s%s", e.Targets[0], e.DNSName, suffix, labelsSuffix)
+	}
+
+	return fmt.Sprintf("%s %s #%s%s", e.Targets[0], e.DNSName, suffix, labelsSuffix)
 }
 
 func artificialRuleToString(domain, suffix string) string {

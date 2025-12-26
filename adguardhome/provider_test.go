@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"sigs.k8s.io/external-dns/endpoint"
@@ -318,5 +319,152 @@ func TestAdguardHomeProvider_MergeRecords(t *testing.T) {
 
 	if !reflect.DeepEqual(got, expected) {
 		t.Errorf("records do not match: got: %v, expected: %v", got, expected)
+	}
+}
+
+func TestAdguardHomeProvider_LabelsHandling(t *testing.T) {
+	c := newMockClient()
+	p := &AdguardHomeProvider{
+		client: c,
+	}
+
+	// Test creating endpoints with labels
+	labelsMap := endpoint.Labels{
+		"owner":       "test-owner",
+		"environment": "production",
+	}
+
+	changes := &plan.Changes{
+		Create: []*endpoint.Endpoint{
+			{
+				DNSName:    "labeled.example.com",
+				RecordType: endpoint.RecordTypeA,
+				Targets:    endpoint.Targets{"5.5.5.5"},
+				Labels:     labelsMap,
+			},
+			{
+				DNSName:    "txtlabeled.example.com",
+				RecordType: endpoint.RecordTypeTXT,
+				Targets:    endpoint.Targets{"v=spf1"},
+				Labels:     labelsMap,
+			},
+		},
+	}
+
+	err := p.ApplyChanges(context.Background(), changes)
+	if err != nil {
+		t.Errorf("failed to apply changes: %v", err)
+	}
+
+	// Verify labels are saved in the rules
+	rules := c.rules
+	foundARecord := false
+	foundTXTRecord := false
+	for _, rule := range rules {
+		if strings.Contains(rule, "5.5.5.5 labeled.example.com") {
+			foundARecord = true
+			if !strings.Contains(rule, `"owner":"test-owner"`) {
+				t.Errorf("A record rule missing labels: %s", rule)
+			}
+		}
+		if strings.Contains(rule, "v=spf1 txtlabeled.example.com") {
+			foundTXTRecord = true
+			if !strings.Contains(rule, `"environment":"production"`) {
+				t.Errorf("TXT record rule missing labels: %s", rule)
+			}
+		}
+	}
+	if !foundARecord {
+		t.Error("A record with labels not found in rules")
+	}
+	if !foundTXTRecord {
+		t.Error("TXT record with labels not found in rules")
+	}
+
+	// Test parsing rules with labels
+	records, err := p.Records(context.Background())
+	if err != nil {
+		t.Errorf("failed to fetch records: %v", err)
+	}
+
+	// Find the labeled record
+	var labeledRecord *endpoint.Endpoint
+	for _, rec := range records {
+		if rec.DNSName == "labeled.example.com" {
+			labeledRecord = rec
+			break
+		}
+	}
+
+	if labeledRecord == nil {
+		t.Fatal("labeled record not found")
+	}
+
+	if !reflect.DeepEqual(labeledRecord.Labels, labelsMap) {
+		t.Errorf("labels not preserved: got %v, expected %v", labeledRecord.Labels, labelsMap)
+	}
+
+	// Test backward compatibility with labelless rules
+	c.rules = []string{
+		"1.1.1.1 old.example.com #$managed by external-dns",
+		"# oldtxt old-txt.example.com $managed by external-dns",
+	}
+
+	records, err = p.Records(context.Background())
+	if err != nil {
+		t.Errorf("failed to fetch records from old format: %v", err)
+	}
+
+	if len(records) != 2 {
+		t.Errorf("expected 2 records, got %d", len(records))
+	}
+
+	// Test updating endpoints preserves labels
+	c.rules = []string{
+		`5.5.5.5 labeled.example.com #$managed by external-dns;labels={"owner":"test-owner","environment":"production"}`,
+	}
+
+	updateChanges := &plan.Changes{
+		UpdateOld: []*endpoint.Endpoint{
+			{
+				DNSName:    "labeled.example.com",
+				RecordType: endpoint.RecordTypeA,
+				Targets:    endpoint.Targets{"5.5.5.5"},
+			},
+		},
+		UpdateNew: []*endpoint.Endpoint{
+			{
+				DNSName:    "labeled.example.com",
+				RecordType: endpoint.RecordTypeA,
+				Targets:    endpoint.Targets{"6.6.6.6"},
+				Labels:     labelsMap,
+			},
+		},
+	}
+
+	err = p.ApplyChanges(context.Background(), updateChanges)
+	if err != nil {
+		t.Errorf("failed to apply update changes: %v", err)
+	}
+
+	records, err = p.Records(context.Background())
+	if err != nil {
+		t.Errorf("failed to fetch records after update: %v", err)
+	}
+
+	var updatedRecord *endpoint.Endpoint
+	for _, rec := range records {
+		if rec.DNSName == "labeled.example.com" {
+			updatedRecord = rec
+			break
+		}
+	}
+
+	if updatedRecord == nil {
+		t.Fatal("updated record not found")
+	}
+
+	if !reflect.DeepEqual(updatedRecord.Labels, labelsMap) {
+		t.Errorf("labels not preserved after update: got %v, expected %v", updatedRecord.Labels, labelsMap)
 	}
 }

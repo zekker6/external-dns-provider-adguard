@@ -2,5 +2,5 @@
 act = "0.2.84"
 goreleaser = "2.12.7"
 task = "3.45.5"
-golangci-lint = "2.9.0"
+golangci-lint = "2.10.1"
 

@@ -19,7 +19,7 @@ jobs:
           go-version: "1.26"
 
       - name: Install mise
-        uses: jdx/mise-action@v3
+        uses: jdx/mise-action@v4
 
       - name: Run build
         run: task build

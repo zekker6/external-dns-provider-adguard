@@ -2,5 +2,12 @@
   "extends": [
     "github>zekker6/renovate-config",
     "github>zekker6/renovate-config:automerge-github-actions"
+  ],
+  "packageRules": [
+    {
+      "description": "Skip goreleaser 2.18.0; later releases are still offered",
+      "matchPackageNames": ["goreleaser/goreleaser"],
+      "allowedVersions": "!/^v?2\\.18\\.0$/"
+    }
   ]
 }

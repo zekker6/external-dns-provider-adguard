@@ -3,7 +3,7 @@ module github.com/zekker6/external-dns-adguard-provider
 go 1.26.6
 
 require (
-	github.com/sirupsen/logrus v1.10.1
+	github.com/sirupsen/logrus v1.10.2
 	sigs.k8s.io/external-dns v0.22.0
 )
 

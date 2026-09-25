@@ -12,9 +12,13 @@ import (
 	"github.com/zekker6/external-dns-adguard-provider/adguardhome"
 )
 
+// Shifting left by 20 multiplies by 2^20, converting 32 MiB to bytes.
+const defaultMaxRequestBodySize = 32 << 20
+
 var (
-	dryRun   = flag.Bool("dry-run", false, "Do not apply changes, just print them")
-	logLevel = flag.String("log-level", "info", "Log level (debug, info, error)")
+	dryRun      = flag.Bool("dry-run", false, "Do not apply changes, just print them")
+	logLevel    = flag.String("log-level", "info", "Log level (debug, info, error)")
+	maxBodySize = flag.Int64("max-body-size", defaultMaxRequestBodySize, "Maximum webhook request body size in bytes (0 or less disables the limit)")
 )
 
 func main() {
@@ -45,5 +49,12 @@ func main() {
 		<-st
 		log.Info("AdguardHomeProvider started on :8888")
 	}()
-	api.StartHTTPApi(p, st, 10*time.Second, 10*time.Second, ":8888")
+	api.StartHTTPApi(api.ServerOptions{
+		Provider:     p,
+		StartedChan:  st,
+		ProviderPort: ":8888",
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		MaxBodySize:  *maxBodySize,
+	})
 }

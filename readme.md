@@ -9,6 +9,12 @@ It takes ownership only for rules which are created by this provider, so existin
 
 This plugin was tested with AdguardHome up to v0.107.62 and ExternalDNS v0.19.0.
 
+The provider uses the ExternalDNS v0.23.0 webhook library and requires Go 1.27.0 or later to build.
+The webhook server listens on `:8888` with 10-second read and write timeouts and a default 32 MiB request body limit.
+Oversized requests return HTTP 413.
+Pass `--max-body-size` to the provider to override the limit in bytes, for example `--max-body-size=67108864` for 64 MiB.
+Values of `0` or less disable the limit; prefer a finite limit to bound memory use.
+
 ## Setting up ExternalDNS for AdguardHome
 
 This tutorial describes how to setup ExternalDNS for usage within a Kubernetes cluster using AdguardHome.

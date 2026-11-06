@@ -37,7 +37,8 @@ func newMockClient() *mockAdguardClient {
 
 func TestAdguardHomeProvider_ApplyChanges(t *testing.T) {
 	p := &AdguardHomeProvider{
-		client: newMockClient(),
+		client:     newMockClient(),
+		ruleFormat: legacyRuleFormat(),
 	}
 
 	create := []*endpoint.Endpoint{
@@ -115,12 +116,14 @@ func TestAdguardHomeProvider_ManagedByRefs(t *testing.T) {
 	provider1 := &AdguardHomeProvider{
 		client:          client,
 		managedBySuffix: "ref1",
+		ruleFormat:      legacyRuleFormat(),
 	}
 
 	// Set up the second provider with a different managedBy reference
 	provider2 := &AdguardHomeProvider{
 		client:          client,
 		managedBySuffix: "ref2",
+		ruleFormat:      legacyRuleFormat(),
 	}
 
 	// Apply changes with the first provider
@@ -266,7 +269,7 @@ func TestAdguardHomeProvider_Records(t *testing.T) {
 }
 
 func TestNewAdguardHomeProvider(t *testing.T) {
-	got, err := NewAdguardHomeProvider(true)
+	got, err := NewAdguardHomeProvider(context.Background(), true)
 	if err == nil {
 		t.Errorf("NewAdguardHomeProvider() error = %v", err)
 		return
@@ -280,7 +283,7 @@ func TestNewAdguardHomeProvider(t *testing.T) {
 	_ = os.Setenv(envUser, "pw")
 	_ = os.Setenv(envPassword, "user")
 
-	_, err = NewAdguardHomeProvider(true)
+	_, err = NewAdguardHomeProvider(context.Background(), true)
 	if err != nil {
 		t.Errorf("NewAdguardHomeProvider() error = %v", err)
 	}
@@ -325,7 +328,8 @@ func TestAdguardHomeProvider_MergeRecords(t *testing.T) {
 func TestAdguardHomeProvider_LabelsHandling(t *testing.T) {
 	c := newMockClient()
 	p := &AdguardHomeProvider{
-		client: c,
+		client:     c,
+		ruleFormat: legacyRuleFormat(),
 	}
 
 	// Test creating endpoints with labels

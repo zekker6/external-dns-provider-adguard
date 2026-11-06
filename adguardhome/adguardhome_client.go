@@ -19,7 +19,8 @@ type Client interface {
 }
 
 type client struct {
-	hc *http.Client
+	hc           *http.Client
+	lifecycleCtx context.Context
 
 	endpoint string
 	user     string
@@ -35,7 +36,24 @@ type setRules struct {
 	Rules []string `json:"rules"`
 }
 
+// requestContext preserves operation deadlines and values while linking shutdown
+// cancellation. Release it only after the response body has been closed.
+func (c *client) requestContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	requestCtx, cancel := context.WithCancel(ctx)
+	stop := context.AfterFunc(c.lifecycleCtx, cancel)
+	if c.lifecycleCtx.Err() != nil {
+		cancel()
+	}
+	return requestCtx, func() {
+		stop()
+		cancel()
+	}
+}
+
 func (c *client) doRequest(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	log.Debugf("making %s request to %s", method, path)
 
 	req, err := http.NewRequestWithContext(ctx, method, c.endpoint+path, body)
@@ -60,24 +78,13 @@ func (c *client) doRequest(ctx context.Context, method, path string, body io.Rea
 	return resp, nil
 }
 
-func (c *client) status(ctx context.Context) error {
-	if c.dryRun {
-		return nil
-	}
-
-	r, err := c.doRequest(ctx, http.MethodGet, "status", nil)
-	if err != nil {
-		return err
-	}
-	_ = r.Body.Close()
-	return nil
-}
-
 func (c *client) GetFilteringRules(ctx context.Context) ([]string, error) {
 	if c.dryRun {
 		return []string{}, nil
 	}
 
+	ctx, release := c.requestContext(ctx)
+	defer release()
 	r, err := c.doRequest(ctx, http.MethodGet, "filtering/status", nil)
 	if err != nil {
 		return nil, err
@@ -98,6 +105,8 @@ func (c *client) SaveFilteringRules(ctx context.Context, rules []string) error {
 		return nil
 	}
 
+	ctx, release := c.requestContext(ctx)
+	defer release()
 	body := setRules{Rules: rules}
 
 	b := bytes.NewBuffer(nil)
@@ -114,21 +123,15 @@ func (c *client) SaveFilteringRules(ctx context.Context, rules []string) error {
 	return nil
 }
 
-func newAdguardHomeClient(endpoint, user, pass string, dryRun bool) (*client, error) {
+func newAdguardHomeClient(ctx context.Context, endpoint, user, pass string, dryRun bool) *client {
 	hc := http.Client{}
-	c := &client{
-		hc:       &hc,
-		endpoint: endpoint,
-		user:     user,
-		pass:     pass,
+	return &client{
+		hc:           &hc,
+		lifecycleCtx: ctx,
+		endpoint:     endpoint,
+		user:         user,
+		pass:         pass,
 
 		dryRun: dryRun,
 	}
-
-	err := c.status(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
-	return c, nil
 }

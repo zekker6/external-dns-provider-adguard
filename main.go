@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -38,23 +42,38 @@ func main() {
 		os.Exit(1)
 	}
 
-	p, err := adguardhome.NewAdguardHomeProvider(*dryRun)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	p, err := adguardhome.NewAdguardHomeProvider(ctx, *dryRun)
 	if err != nil {
-		log.WithError(err).Fatal("Failed to create AdguardHomeProvider")
+		log.WithError(err).Error("Failed to create AdguardHomeProvider")
 		os.Exit(1)
 	}
-
-	st := make(chan struct{})
-	go func() {
-		<-st
-		log.Info("AdguardHomeProvider started on :8888")
-	}()
-	api.StartHTTPApi(api.ServerOptions{
+	if err := p.Initialize(ctx); err != nil {
+		if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
+			return
+		}
+		log.WithError(err).Error("Failed to initialize AdguardHomeProvider")
+		os.Exit(1)
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	started := make(chan struct{}, 1)
+	go api.StartHTTPApi(api.ServerOptions{
 		Provider:     p,
-		StartedChan:  st,
+		StartedChan:  started,
 		ProviderPort: ":8888",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		MaxBodySize:  *maxBodySize,
 	})
+	select {
+	case <-started:
+		log.Info("AdguardHomeProvider started on :8888")
+	case <-ctx.Done():
+		return
+	}
+	<-ctx.Done()
 }

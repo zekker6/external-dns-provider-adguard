@@ -2,10 +2,10 @@ package adguardhome
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -23,10 +23,11 @@ var (
 const (
 	managedBy = "$managed by external-dns"
 
-	envURL       = "ADGUARD_HOME_URL"
-	envPassword  = "ADGUARD_HOME_PASS"
-	envUser      = "ADGUARD_HOME_USER"
-	envManagedBy = "ADGUARD_HOME_MANAGED_BY_REF"
+	envURL           = "ADGUARD_HOME_URL"
+	envPassword      = "ADGUARD_HOME_PASS"
+	envUser          = "ADGUARD_HOME_USER"
+	envManagedBy     = "ADGUARD_HOME_MANAGED_BY_REF"
+	envUseDNSRewrite = "ADGUARD_HOME_USE_DNSREWRITE"
 )
 
 type AdguardHomeProvider struct {
@@ -37,10 +38,12 @@ type AdguardHomeProvider struct {
 	domainFilter *endpoint.DomainFilter
 
 	managedBySuffix string
+	ruleFormat      ruleFormat
 }
 
-// NewAdguardHomeProvider initializes a new AdguardHome based provider
-func NewAdguardHomeProvider(dryRun bool) (*AdguardHomeProvider, error) {
+// NewAdguardHomeProvider configures a provider without making HTTP requests.
+// Cancelling ctx cancels outgoing AdGuard HTTP requests throughout its lifetime.
+func NewAdguardHomeProvider(ctx context.Context, dryRun bool) (*AdguardHomeProvider, error) {
 	adguardHomeURL, adguardHomeUrlOk := os.LookupEnv(envURL)
 	if !adguardHomeUrlOk {
 		return nil, fmt.Errorf("no url was found in environment variable ADGUARD_HOME_URL")
@@ -65,21 +68,43 @@ func NewAdguardHomeProvider(dryRun bool) (*AdguardHomeProvider, error) {
 		return nil, fmt.Errorf("no password was found in environment variable ADGUARD_HOME_PASS")
 	}
 
-	c, err := newAdguardHomeClient(adguardHomeURL, adguardHomeUser, adguardHomePass, dryRun)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create the adguard home api hс: %w", err)
+	var useDNSRewrite bool
+	if value := os.Getenv(envUseDNSRewrite); value != "" {
+		var err error
+		useDNSRewrite, err = strconv.ParseBool(value)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s: %w", envUseDNSRewrite, err)
+		}
 	}
+
+	c := newAdguardHomeClient(ctx, adguardHomeURL, adguardHomeUser, adguardHomePass, dryRun)
 	managedBySuffix, _ := os.LookupEnv(envManagedBy)
 
+	format := legacyRuleFormat()
+	if useDNSRewrite {
+		format = rewriteRuleFormat()
+	}
 	p := &AdguardHomeProvider{
 		client:          c,
 		domainFilter:    &endpoint.DomainFilter{},
 		managedBySuffix: managedBySuffix,
+		ruleFormat:      format,
 	}
 
-	log.Debugf("AdguardHome provider started with url %s", adguardHomeURL)
+	log.Debugf("AdguardHome provider configured with url %s", adguardHomeURL)
 
 	return p, nil
+}
+
+// Initialize migrates managed filtering rules before the webhook starts serving.
+func (p *AdguardHomeProvider) Initialize(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := p.migrateRules(ctx); err != nil {
+		return fmt.Errorf("failed to migrate filtering rules: %w", err)
+	}
+	return nil
 }
 
 func (p *AdguardHomeProvider) getManagedBy() string {
@@ -88,6 +113,32 @@ func (p *AdguardHomeProvider) getManagedBy() string {
 	}
 
 	return fmt.Sprintf("%s;ref:%s", managedBy, p.managedBySuffix)
+}
+
+// migrateRules runs at startup because ExternalDNS does not call ApplyChanges
+// when the desired DNS records have not changed.
+func (p *AdguardHomeProvider) migrateRules(ctx context.Context) error {
+	rules, err := p.client.GetFilteringRules(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, original := range rules {
+		rule := strings.TrimSpace(original)
+		e, err := parseRule(rule, p.getManagedBy())
+		if errors.Is(err, errNotManaged) || errors.Is(err, errArtificialRecord) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if endpointSupported(e) && p.ruleFormat.needsMigration(rule) {
+			log.Info("Migrating managed filtering rules")
+			return p.applyChanges(ctx, rules, &plan.Changes{})
+		}
+	}
+
+	return nil
 }
 
 // ApplyChanges implements Provider, syncing desired state with the AdguardHome server Local DNS.
@@ -99,33 +150,16 @@ func (p *AdguardHomeProvider) ApplyChanges(ctx context.Context, changes *plan.Ch
 		return err
 	}
 
+	return p.applyChanges(ctx, originalRules, changes)
+}
+
+func (p *AdguardHomeProvider) applyChanges(ctx context.Context, originalRules []string, changes *plan.Changes) error {
 	log.Debugf("loaded existing rules: %+v", originalRules)
 
-	resultingRules := make([]string, 0)
-	endpoints := make([]*endpoint.Endpoint, 0)
-	endpointsAExists := make(map[string]*endpoint.Endpoint)
 	suffix := p.getManagedBy()
-	for _, rule := range originalRules {
-		e, err := parseRule(rule, suffix)
-		if err != nil {
-			// Keep rules not managed by external-dns as-is
-			if errors.Is(err, errNotManaged) {
-				resultingRules = append(resultingRules, rule)
-				continue
-			}
-			// Skip artificial rules we manage; they will be reconstructed
-			if errors.Is(err, errArtificialRecord) {
-				continue
-			}
-			return fmt.Errorf("failed to parse rule %s: %w", rule, err)
-		}
-
-		if endpointsAExists[e.DNSName] != nil {
-			endpointsAExists[e.DNSName].Targets = append(endpointsAExists[e.DNSName].Targets, e.Targets...)
-		} else {
-			endpoints = append(endpoints, e)
-			endpointsAExists[e.DNSName] = e
-		}
+	endpoints, resultingRules, err := parseRules(originalRules, suffix)
+	if err != nil {
+		return err
 	}
 
 	for _, deleteEndpoint := range append(changes.UpdateOld, changes.Delete...) {
@@ -156,22 +190,11 @@ func (p *AdguardHomeProvider) ApplyChanges(ctx context.Context, changes *plan.Ch
 		log.Debugf("add custom rule %s", createEndpoint)
 	}
 
-	// Build resulting rules: first all endpoint rules, then one artificial rule per unique A record domain
-	domainSeen := make(map[string]struct{})
-	domainsOrder := make([]string, 0)
-	for _, e := range endpoints {
-		s := endpointToString(e, suffix)
-		resultingRules = append(resultingRules, s)
-		if e.RecordType == endpoint.RecordTypeA {
-			if _, ok := domainSeen[e.DNSName]; !ok {
-				domainSeen[e.DNSName] = struct{}{}
-				domainsOrder = append(domainsOrder, e.DNSName)
-			}
-		}
+	managedRules, err := p.ruleFormat.formatRules(endpoints, suffix)
+	if err != nil {
+		return err
 	}
-	for _, d := range domainsOrder {
-		resultingRules = append(resultingRules, artificialRuleToString(d, suffix))
-	}
+	resultingRules = append(resultingRules, managedRules...)
 
 	return p.client.SaveFilteringRules(ctx, resultingRules)
 }
@@ -190,29 +213,23 @@ func (p *AdguardHomeProvider) Records(ctx context.Context) ([]*endpoint.Endpoint
 		"rules": resp,
 	}).Debugf("retrieved AdguardHome rules")
 
-	var ret []*endpoint.Endpoint
-	endpointsAExists := make(map[string]*endpoint.Endpoint)
-	suffix := p.getManagedBy()
-	for _, rule := range resp {
-		e, err := parseRule(rule, suffix)
-		if err != nil {
-			if errors.Is(err, errNotManaged) {
-				continue
-			}
-			if errors.Is(err, errArtificialRecord) {
-				continue
-			}
-			return nil, err
-		}
+	endpoints, _, err := parseRules(resp, p.getManagedBy())
+	if err != nil {
+		return nil, err
+	}
 
+	var ret []*endpoint.Endpoint
+	endpointsByKey := make(map[endpoint.EndpointKey]*endpoint.Endpoint)
+	for _, e := range endpoints {
 		if !p.domainFilter.Match(e.DNSName) {
 			continue
 		}
-		if endpointsAExists[e.DNSName] != nil {
-			endpointsAExists[e.DNSName].Targets = append(endpointsAExists[e.DNSName].Targets, e.Targets...)
+		key := e.Key()
+		if endpointsByKey[key] != nil {
+			endpointsByKey[key].Targets = append(endpointsByKey[key].Targets, e.Targets...)
 		} else {
 			ret = append(ret, e)
-			endpointsAExists[e.DNSName] = e
+			endpointsByKey[key] = e
 		}
 	}
 
@@ -223,79 +240,4 @@ func (p *AdguardHomeProvider) Records(ctx context.Context) ([]*endpoint.Endpoint
 // it is only possible to store A and TXT records in AdguardHome
 func endpointSupported(e *endpoint.Endpoint) bool {
 	return e.RecordType == endpoint.RecordTypeA || e.RecordType == endpoint.RecordTypeTXT
-}
-
-func parseRule(rule, suffix string) (*endpoint.Endpoint, error) {
-	if !strings.Contains(rule, suffix) {
-		return nil, errNotManaged
-	}
-
-	// Ignore artificial rules that we manage and will reconstruct
-	if strings.HasPrefix(rule, "@@||") {
-		return nil, errArtificialRecord
-	}
-
-	// Extract labels from the rule if present
-	var labels endpoint.Labels
-	ruleWithoutLabels := rule
-	if labelsIdx := strings.Index(rule, ";labels="); labelsIdx != -1 {
-		labelsStart := labelsIdx + len(";labels=")
-		labelsJSON := rule[labelsStart:]
-		labels = make(endpoint.Labels)
-		if err := json.Unmarshal([]byte(labelsJSON), &labels); err != nil {
-			log.Warnf("failed to parse labels from rule %s: %v", rule, err)
-			labels = nil
-		}
-		ruleWithoutLabels = rule[:labelsIdx]
-	}
-
-	if strings.HasPrefix(rule, "#") {
-		r := &endpoint.Endpoint{
-			RecordType: endpoint.RecordTypeTXT,
-			Labels:     labels,
-		}
-		parts := strings.SplitN(ruleWithoutLabels, " ", 4)
-		if len(parts) != 4 {
-			return nil, fmt.Errorf("invalid rule: %s", rule)
-		}
-		r.DNSName = parts[2]
-		r.Targets = endpoint.Targets{strings.ReplaceAll(parts[1], suffix, "")}
-
-		return r, nil
-	}
-
-	parts := strings.SplitN(ruleWithoutLabels, " ", 3)
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid rule: %s", rule)
-	}
-
-	r := &endpoint.Endpoint{
-		RecordType: endpoint.RecordTypeA,
-		DNSName:    parts[1],
-		Targets:    endpoint.Targets{parts[0]},
-		Labels:     labels,
-	}
-
-	return r, nil
-}
-
-func endpointToString(e *endpoint.Endpoint, suffix string) string {
-	// Serialize labels if present
-	labelsSuffix := ""
-	if len(e.Labels) > 0 {
-		labelsJSON, err := json.Marshal(e.Labels)
-		if err == nil {
-			labelsSuffix = fmt.Sprintf(";labels=%s", string(labelsJSON))
-		}
-	}
-
-	if e.RecordType == endpoint.RecordTypeTXT {
-		return fmt.Sprintf("# %s %s %s%s", e.Targets[0], e.DNSName, suffix, labelsSuffix)
-	}
-
-	return fmt.Sprintf("%s %s #%s%s", e.Targets[0], e.DNSName, suffix, labelsSuffix)
-}
-
-func artificialRuleToString(domain, suffix string) string {
-	return fmt.Sprintf("@@||%s #%s", domain, suffix)
 }

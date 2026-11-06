@@ -15,6 +15,68 @@ Oversized requests return HTTP 413.
 Pass `--max-body-size` to the provider to override the limit in bytes, for example `--max-body-size=67108864` for 64 MiB.
 Values of `0` or less disable the limit; prefer a finite limit to bound memory use.
 
+Before accepting webhook requests, the provider checks AdGuard and migrates
+managed rules when needed. Startup failures leave the webhook unavailable.
+SIGINT and SIGTERM cancel in-flight AdGuard HTTP calls and stop the process.
+
+## Experimental DNS rewrite rules
+
+Set `ADGUARD_HOME_USE_DNSREWRITE=true` on the provider container to test explicit
+[`$dnsrewrite` rules](https://adguard-dns.io/kb/general/dns-filtering-syntax/#dnsrewrite-modifier).
+The default is `false`; an unset or empty value also disables the flag. Invalid boolean values fail startup.
+
+Restart the provider after changing the flag.
+
+When enabled, the provider migrates its existing managed A and TXT records at
+startup, including when ExternalDNS has no DNS changes to apply. New records also
+use this syntax. Managed allow-rule companions are removed. Labels and rules
+belonging to other owners remain unchanged. TXT values, including ExternalDNS TXT
+registry ownership records, become queryable over DNS.
+Migration does not write anything in provider dry-run mode.
+Wildcard hostnames are rejected in rewrite mode; exclude them before enabling
+it. Rejection prevents startup migration or the entire change batch from being saved.
+
+For example, a managed record becomes two adjacent lines:
+
+```text
+! 192.0.2.10 app.example.com #$managed by external-dns
+|app.example.com|$dnsrewrite=NOERROR;A;192.0.2.10
+```
+
+Keep each ownership comment adjacent to its rule; missing or mismatched pairs stop
+reconciliation. Rules match only the exact non-wildcard hostname. Multiple
+addresses produce one pair per address. TXT pairs preserve the original value
+and labels in a JSON comment:
+
+```text
+! $managed by external-dns {"dnsName":"txt.example.com","targets":["verification-token"],"recordType":"TXT"}
+|txt.example.com|$dnstype=TXT,dnsrewrite=NOERROR;TXT;verification-token
+```
+
+TXT targets can be plain text or a single DNS-quoted string, with at most 255
+decoded bytes per target. Reserved characters are escaped automatically; original
+values and labels are preserved for rollback. Multiple targets produce separate
+TXT records. Invalid quoting, multi-string quoted targets, oversized values, and
+literal line breaks reject the entire batch without saving rules. During startup,
+one invalid existing TXT target prevents migration and the webhook from starting.
+A and TXT records can share a hostname. TXT-only rewrites do not suppress upstream
+A, AAAA, or other record types.
+
+AdGuard Home classifies these answers as **Rewritten**, not Blocked, so they do
+not inflate blocked-query statistics. This requires AdGuard Home v0.105.0 or later.
+An A-only rewrite returns an empty `NOERROR` answer for other query types unless
+another applicable rewrite supplies that type. Provider management markers and
+labels stay in comments; only endpoint TXT values are served. With the flag off,
+TXT values remain comments and are not served over DNS.
+
+To roll back, set the flag to `false` or remove it, then restart this build of the
+provider. Startup converts managed A rewrite pairs back to hosts-style rules,
+restores their allow-rule companions, and converts TXT pairs back to comments.
+Roll back before switching to an older provider build, which cannot read the new
+metadata pairs. Older builds also misparse TXT values containing whitespace, even
+after rollback. Remove those TXT endpoints from desired state and reconcile before
+downgrading, or keep this build with the flag disabled.
+
 ## Setting up ExternalDNS for AdguardHome
 
 This tutorial describes how to setup ExternalDNS for usage within a Kubernetes cluster using AdguardHome.

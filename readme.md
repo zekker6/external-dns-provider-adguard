@@ -7,9 +7,9 @@ It takes ownership only for rules which are created by this provider, so existin
 
 ### Compatibility
 
-This plugin was tested with AdguardHome up to v0.107.62 and ExternalDNS v0.19.0.
+This plugin was tested with AdguardHome up to v0.107.79 and ExternalDNS v0.24.0.
 
-The provider uses the ExternalDNS v0.23.0 webhook library and requires Go 1.27.0 or later to build.
+The provider uses the ExternalDNS v0.24.0 webhook library and requires Go 1.27.0 or later to build.
 The webhook server listens on `:8888` with 10-second read and write timeouts and a default 32 MiB request body limit.
 Oversized requests return HTTP 413.
 Pass `--max-body-size` to the provider to override the limit in bytes, for example `--max-body-size=67108864` for 64 MiB.
@@ -273,7 +273,7 @@ ExternalDNS uses `external-dns.alpha.kubernetes.io/hostname` annotation to deter
 Create the deployment and service:
 
 ```console
-$ kubectl create -f nginx.yaml
+kubectl create -f nginx.yaml
 ```
 
 Depending where you run your service it can take a little while for your cloud provider to create an external IP for the service.
@@ -293,6 +293,6 @@ This should show the external IP address of the service as the "Answer" for your
 Now that we have verified that ExternalDNS will automatically manage AdguardHome DNS records, we can delete the tutorial's example:
 
 ```
-$ kubectl delete service -f nginx.yaml
-$ kubectl delete service -f externaldns.yaml
+kubectl delete service -f nginx.yaml
+kubectl delete service -f externaldns.yaml
 ```
